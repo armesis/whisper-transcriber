@@ -7,7 +7,7 @@ thread for us).
 import threading
 
 from pynput import keyboard
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Qt, Signal
 
 from . import history
 from .audio import Recorder
@@ -65,6 +65,7 @@ class Engine(QObject):
     transcriptReady = Signal(str)
     finished = Signal()
     statusMessage = Signal(str)
+    _deliverRequested = Signal(str)
 
     def __init__(self, cfg: Config):
         super().__init__()
@@ -76,6 +77,10 @@ class Engine(QObject):
         self._enabled = True
         self._lock = threading.Lock()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
+        # Qt's clipboard needs COM initialized on the calling thread, which is only
+        # guaranteed on the GUI thread. Route delivery through a queued signal so
+        # deliver() actually runs there instead of on the worker thread.
+        self._deliverRequested.connect(self._do_deliver, Qt.QueuedConnection)
 
     def start(self) -> None:
         self._listener.start()
@@ -122,7 +127,10 @@ class Engine(QObject):
         if text:
             history.add_entry(text)
             self.transcriptReady.emit(text)
-            deliver(text, self.cfg)
+            self._deliverRequested.emit(text)
         else:
             self.statusMessage.emit("(no speech detected)")
         self.finished.emit()
+
+    def _do_deliver(self, text: str) -> None:
+        deliver(text, self.cfg)
