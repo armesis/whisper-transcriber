@@ -160,6 +160,7 @@ class _HistoryTab(QWidget):
 class MainWindow(QWidget):
     def __init__(self, engine: Engine):
         super().__init__()
+        self.setWindowTitle("Whisper Transcriber")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.resize(480, 420)

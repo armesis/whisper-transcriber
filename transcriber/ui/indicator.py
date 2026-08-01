@@ -1,4 +1,6 @@
 """Small floating pill that shows up at the bottom of the screen while dictating."""
+import sys
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QWidget
@@ -9,12 +11,14 @@ from .theme import ACCENT, BG, TEXT
 class Indicator(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(
-            Qt.FramelessWindowHint
-            | Qt.WindowStaysOnTopHint
-            | Qt.Tool
-            | Qt.X11BypassWindowManagerHint
-        )
+        flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        if sys.platform.startswith("linux"):
+            # Helps this borderless "always on top" pill render correctly under
+            # X11 window managers. This flag is X11-specific and unreliable
+            # elsewhere - on Windows it can prevent the window from ever being
+            # mapped/shown at all, so it must not be applied there.
+            flags |= Qt.X11BypassWindowManagerHint
+        self.setWindowFlags(flags)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(180, 44)
 

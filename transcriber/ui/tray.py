@@ -26,7 +26,15 @@ class Tray(QSystemTrayIcon):
 
         self.setContextMenu(menu)
         self.activated.connect(self._on_activated)
-        self.show()
+
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.show()
+        else:
+            print(
+                "No system tray available on this desktop - the settings window "
+                "won't be reachable via a tray icon. Keep it open, or re-run "
+                "main.py to bring it back."
+            )
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:

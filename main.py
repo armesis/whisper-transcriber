@@ -28,6 +28,13 @@ def main():
     window = MainWindow(engine)
     tray = Tray(window, app)  # noqa: F841 - keeps the tray icon alive
 
+    # Show the settings window on launch - the tray icon alone isn't reliably
+    # discoverable (Windows hides new tray icons in the overflow area by
+    # default). Closing it just hides it; reopen from the tray any time.
+    window.show()
+    window.raise_()
+    window.activateWindow()
+
     engine.start()
 
     sys.exit(app.exec())
