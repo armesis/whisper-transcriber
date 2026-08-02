@@ -43,8 +43,10 @@ python main.py
 A tray icon appears (a purple mic in a circle). Click it to open the settings
 window, where you can:
 
-- **Hotkey tab** — click the key button and press whatever you want your new
-  push-to-talk key to be (default: **F9**).
+- **Hotkey tab** — click the key button and hold whatever you want your new
+  push-to-talk hotkey to be; it can be a single key or a combo (e.g. hold
+  Ctrl then Win) — release any one of them to finish capturing (default:
+  **F9**). Releasing any key in the combo while dictating stops the recording.
 - **History tab** — every transcript is saved locally (`history.db`, SQLite);
   search it, double-click an entry to copy it back to the clipboard, delete
   entries, or clear everything.

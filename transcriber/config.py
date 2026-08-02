@@ -8,7 +8,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 @dataclass
 class Config:
-    hotkey: str = "f9"          # push-to-talk key: hold to record, release to transcribe+paste
+    hotkey: str = "f9"          # push-to-talk key, or combo like "ctrl+cmd": hold to record, release to transcribe+paste
     model_size: str = "small"   # tiny/base/small/medium/large-v3 (bigger = slower + more accurate)
     device: str = "auto"        # auto/cuda/cpu
     compute_type: str = "auto"  # auto/float16/int8/int8_float16

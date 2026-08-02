@@ -17,9 +17,13 @@ from PySide6.QtWidgets import (
 )
 
 from .. import history
-from ..engine import Engine
+from ..engine import Engine, format_hotkey
 from .hotkey_dialog import HotkeyDialog
 from .theme import BG, BORDER
+
+
+def _display_hotkey(spec: str) -> str:
+    return spec.replace("+", " + ").upper()
 
 
 class _TitleBar(QWidget):
@@ -65,16 +69,20 @@ class _HotkeyTab(QWidget):
         label_box = QVBoxLayout()
         label = QLabel("Push-to-talk hotkey")
         label.setStyleSheet("font-weight: 600;")
-        desc = QLabel("Hold this key to dictate, release to transcribe + paste.")
+        desc = QLabel(
+            "Hold this key (or combo, e.g. Ctrl + Win) to dictate, release either "
+            "one to transcribe + paste."
+        )
+        desc.setWordWrap(True)
         desc.setObjectName("muted")
         label_box.addWidget(label)
         label_box.addWidget(desc)
         row.addLayout(label_box)
         row.addStretch()
 
-        self._key_btn = QPushButton(engine.cfg.hotkey.upper())
+        self._key_btn = QPushButton(_display_hotkey(engine.cfg.hotkey))
         self._key_btn.setObjectName("accent")
-        self._key_btn.setFixedWidth(120)
+        self._key_btn.setFixedWidth(160)
         self._key_btn.clicked.connect(self._change_hotkey)
         row.addWidget(self._key_btn)
 
@@ -85,9 +93,9 @@ class _HotkeyTab(QWidget):
     def _change_hotkey(self):
         self._engine.set_enabled(False)
         dialog = HotkeyDialog(self)
-        if dialog.exec() and dialog.result_key:
-            self._engine.set_hotkey(dialog.result_key)
-            self._key_btn.setText(dialog.result_key.upper())
+        if dialog.exec() and dialog.result_keys:
+            self._engine.set_hotkey(dialog.result_keys)
+            self._key_btn.setText(_display_hotkey(format_hotkey(dialog.result_keys)))
         self._engine.set_enabled(True)
 
 

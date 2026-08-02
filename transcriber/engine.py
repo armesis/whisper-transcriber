@@ -1,4 +1,5 @@
-"""Push-to-talk engine: hold the hotkey to record, release to transcribe + deliver.
+"""Push-to-talk engine: hold the hotkey (a key, or a combo like ctrl+cmd) to
+record, release any key in it to transcribe + deliver.
 
 Exposed as a QObject so the UI can connect to its signals (it's driven from
 pynput's own background thread; Qt auto-queues signal delivery into the GUI
@@ -15,45 +16,71 @@ from .config import Config, save_config
 from .model import Transcriber
 from .output import deliver
 
+# pynput reports the specific left/right variant of modifier keys on press
+# (e.g. Key.ctrl_l), not the generic Key.ctrl. Normalize both directions so a
+# combo like "ctrl+cmd" matches either physical Ctrl key.
+_MODIFIER_ALIASES = {
+    "ctrl_l": "ctrl",
+    "ctrl_r": "ctrl",
+    "alt_l": "alt",
+    "alt_r": "alt",
+    "alt_gr": "alt",
+    "shift_l": "shift",
+    "shift_r": "shift",
+    "cmd_l": "cmd",
+    "cmd_r": "cmd",
+}
 
-def resolve_key(name: str):
-    """Map a config string like 'f9' or 'caps_lock' to a pynput key, or a plain character."""
+
+def _normalize(name: str) -> str:
     name = name.strip().lower()
-    special = getattr(keyboard.Key, name, None)
-    if special is not None:
-        return special
-    if len(name) == 1:
-        return name
-    raise ValueError(
-        f"Unrecognized hotkey '{name}'. Use names like 'f9', 'caps_lock', "
-        f"'right_ctrl', or a single character like 'z'."
-    )
+    return _MODIFIER_ALIASES.get(name, name)
 
 
-def key_to_name(key) -> str:
-    """Inverse of resolve_key: turn a pynput key event into a config-friendly string."""
+def key_event_name(key) -> str:
+    """Turn a pynput key event into a normalized, config-friendly string name."""
     if isinstance(key, keyboard.Key):
-        return key.name
+        return _normalize(key.name)
     char = getattr(key, "char", None)
-    return (char or "").lower()
+    return _normalize(char) if char else ""
 
 
-def _key_matches(pressed_key, target) -> bool:
-    if isinstance(target, keyboard.Key):
-        return pressed_key == target
-    char = getattr(pressed_key, "char", None)
-    return char is not None and char.lower() == target
+def parse_hotkey(spec: str) -> frozenset[str]:
+    """'ctrl+cmd' -> frozenset({'ctrl', 'cmd'}); also accepts a single key like 'f9'."""
+    names = frozenset(_normalize(part) for part in spec.split("+") if part.strip())
+    if not names:
+        raise ValueError(f"Unrecognized hotkey '{spec}'.")
+    return names
 
 
-def capture_next_key(callback) -> keyboard.Listener:
-    """Start a one-shot listener that calls callback(name) with the next key pressed,
-    then stops itself. Caller keeps a reference so it isn't garbage-collected early."""
+def format_hotkey(names) -> str:
+    return "+".join(sorted(names))
+
+
+def capture_next_combo(on_progress, on_captured) -> keyboard.Listener:
+    """Start a listener that reports the growing set of held-down keys via
+    on_progress(names) as the user presses them, then finalizes the combo via
+    on_captured(names) on the first key release. Caller keeps a reference to
+    the returned listener so it isn't garbage-collected early."""
+    held: set[str] = set()
+    captured: set[str] = set()
 
     def on_press(key):
-        listener.stop()
-        callback(key_to_name(key))
+        name = key_event_name(key)
+        if not name:
+            return
+        held.add(name)
+        captured.add(name)
+        on_progress(sorted(captured))
 
-    listener = keyboard.Listener(on_press=on_press)
+    def on_release(key):
+        name = key_event_name(key)
+        held.discard(name)
+        if captured:
+            listener.stop()
+            on_captured(sorted(captured))
+
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
     return listener
 
@@ -70,9 +97,10 @@ class Engine(QObject):
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
-        self.target_key = resolve_key(cfg.hotkey)
+        self.target_keys = parse_hotkey(cfg.hotkey)
         self.recorder = Recorder(cfg.sample_rate)
         self.transcriber = Transcriber(cfg)
+        self._held: set[str] = set()
         self._recording = False
         self._enabled = True
         self._lock = threading.Lock()
@@ -84,33 +112,49 @@ class Engine(QObject):
 
     def start(self) -> None:
         self._listener.start()
-        self.statusMessage.emit(f"Ready. Hold '{self.cfg.hotkey}' to dictate.")
+        self.statusMessage.emit(f"Ready. Hold '{format_hotkey(self.target_keys)}' to dictate.")
 
-    def set_hotkey(self, name: str) -> None:
-        self.target_key = resolve_key(name)
-        self.cfg.hotkey = name
+    def set_hotkey(self, names) -> None:
+        spec = format_hotkey(names)
+        self.target_keys = parse_hotkey(spec)
+        self._held.clear()
+        self.cfg.hotkey = spec
         save_config(self.cfg)
-        self.statusMessage.emit(f"Hotkey set to '{name}'.")
+        self.statusMessage.emit(f"Hotkey set to '{spec}'.")
 
     def set_enabled(self, enabled: bool) -> None:
         """Pause/resume push-to-talk, e.g. while capturing a new hotkey in the UI."""
         self._enabled = enabled
+        if not enabled:
+            self._held.clear()
 
     def _on_press(self, key):
-        if not self._enabled or not _key_matches(key, self.target_key):
+        if not self._enabled:
             return
+        name = key_event_name(key)
+        if not name:
+            return
+        self._held.add(name)
+        self._maybe_start()
+
+    def _on_release(self, key):
+        name = key_event_name(key)
+        self._held.discard(name)
+        if not self._enabled:
+            return
+        self._maybe_stop()
+
+    def _maybe_start(self):
         with self._lock:
-            if self._recording:
+            if self._recording or not self.target_keys.issubset(self._held):
                 return
             self._recording = True
         self.recorder.start()
         self.recordingStarted.emit()
 
-    def _on_release(self, key):
-        if not self._enabled or not _key_matches(key, self.target_key):
-            return
+    def _maybe_stop(self):
         with self._lock:
-            if not self._recording:
+            if not self._recording or self.target_keys.issubset(self._held):
                 return
             self._recording = False
         audio = self.recorder.stop()
