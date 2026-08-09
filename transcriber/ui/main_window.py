@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import history
-from ..engine import Engine, format_hotkey
+from ..engine import Engine, format_hotkey, session_warning
 from .hotkey_dialog import HotkeyDialog
 from .theme import BG, BORDER
 
@@ -60,6 +60,20 @@ class _HotkeyTab(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
+
+        # Stays visible after the startup dialog is dismissed - otherwise a
+        # Wayland session just looks like the hotkey picker is broken.
+        if session_warning():
+            banner = QLabel(
+                "Wayland session: global hotkeys are blocked by the compositor, "
+                "so the picker below won't capture keys. Log in to \"Ubuntu on "
+                "Xorg\" to use push-to-talk."
+            )
+            banner.setWordWrap(True)
+            banner.setStyleSheet(
+                "background: #4a2c14; color: #f0c98a; border-radius: 8px; padding: 10px;"
+            )
+            layout.addWidget(banner)
 
         card = QFrame()
         card.setObjectName("card")

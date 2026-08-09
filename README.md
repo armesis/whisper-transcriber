@@ -83,7 +83,20 @@ whether to paste automatically) still live in `config.json`, created next to
   to simulate the paste. **It will not work under a Wayland session**
   (Wayland blocks apps from seeing global input for security reasons) — at
   the login screen, choose **"Ubuntu on Xorg"** instead of the default
-  "Ubuntu" session. Ubuntu 22.04/24.04 both still ship the Xorg option.
+  "Ubuntu" session. Ubuntu 22.04/24.04 both still ship the Xorg option. The
+  app detects a Wayland session at startup and says so, rather than starting
+  up looking fine and then never responding to the hotkey.
+
+  To make Xorg the permanent default (recommended — a kernel or NVIDIA driver
+  update can flip GDM back to Wayland without warning, since GDM only forces
+  Xorg while `nvidia_drm` reports `modeset != Y`):
+
+  ```bash
+  sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/custom.conf
+  ```
+
+  then reboot. Verify afterwards with `echo $XDG_SESSION_TYPE` — it should
+  print `x11`.
 - **Tray icon on Ubuntu**: stock GNOME hides app tray icons. Install the
   **"AppIndicator and KStatusNotifierItem Support"** GNOME Shell extension
   (via `gnome-extensions-app` or extensions.gnome.org) to see it. If you'd

@@ -1,9 +1,9 @@
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from transcriber.config import load_config
-from transcriber.engine import Engine
+from transcriber.engine import Engine, session_warning
 from transcriber.ui.indicator import Indicator
 from transcriber.ui.main_window import MainWindow
 from transcriber.ui.theme import STYLESHEET, app_icon
@@ -36,6 +36,12 @@ def main():
     window.activateWindow()
 
     engine.start()
+
+    # Wayland silently swallows global key events, so the app would otherwise
+    # look dead with no error anywhere. Warn after show() so this sits on top.
+    if warning := session_warning():
+        print(warning)
+        QMessageBox.warning(window, "Global hotkeys unavailable", warning)
 
     sys.exit(app.exec())
 

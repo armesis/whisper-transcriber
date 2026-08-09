@@ -5,6 +5,8 @@ Exposed as a QObject so the UI can connect to its signals (it's driven from
 pynput's own background thread; Qt auto-queues signal delivery into the GUI
 thread for us).
 """
+import os
+import sys
 import threading
 
 from pynput import keyboard
@@ -35,6 +37,38 @@ _MODIFIER_ALIASES = {
 def _normalize(name: str) -> str:
     name = name.strip().lower()
     return _MODIFIER_ALIASES.get(name, name)
+
+
+def session_warning() -> str:
+    """Explain why global hotkeys can't work in this session, or '' if they can.
+
+    pynput's Linux backend is X11 (XRecord). Under a Wayland session its listener
+    starts and reports running=True, but the compositor only forwards key events
+    to XWayland clients - so nothing global is ever seen: push-to-talk never
+    fires and the hotkey picker captures nothing. Both fail silently, which looks
+    exactly like the app being broken, so say so up front instead.
+    """
+    if sys.platform != "linux":
+        return ""
+    wayland = (
+        os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+        or bool(os.environ.get("WAYLAND_DISPLAY"))
+    )
+    if not wayland:
+        return ""
+    return (
+        "This is a Wayland session, and Wayland does not let applications see "
+        "global key events.\n\n"
+        "The push-to-talk hotkey will not fire, and the hotkey picker will not "
+        "capture anything. Transcription and history still work; nothing else "
+        "is wrong.\n\n"
+        "Fix: log in to an Xorg session instead - pick \"Ubuntu on Xorg\" from "
+        "the gear icon on the login screen. To make that the permanent default "
+        "so you never have to choose again, run:\n\n"
+        "    sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' "
+        "/etc/gdm3/custom.conf\n\n"
+        "then reboot."
+    )
 
 
 def key_event_name(key) -> str:
