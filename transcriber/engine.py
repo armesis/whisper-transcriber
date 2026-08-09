@@ -122,8 +122,11 @@ def capture_next_combo(on_progress, on_captured) -> keyboard.Listener:
 class Engine(QObject):
     recordingStarted = Signal()
     recordingStopped = Signal()
+    audioLevel = Signal(float)
     transcribing = Signal()
     transcriptReady = Signal(str)
+    pasted = Signal()
+    hotkeyChanged = Signal(str)
     finished = Signal()
     statusMessage = Signal(str)
     _deliverRequested = Signal(str)
@@ -132,7 +135,7 @@ class Engine(QObject):
         super().__init__()
         self.cfg = cfg
         self.target_keys = parse_hotkey(cfg.hotkey)
-        self.recorder = Recorder(cfg.sample_rate)
+        self.recorder = Recorder(cfg.sample_rate, on_level=self.audioLevel.emit)
         self.transcriber = Transcriber(cfg)
         self._held: set[str] = set()
         self._recording = False
@@ -154,6 +157,7 @@ class Engine(QObject):
         self._held.clear()
         self.cfg.hotkey = spec
         save_config(self.cfg)
+        self.hotkeyChanged.emit(spec)
         self.statusMessage.emit(f"Hotkey set to '{spec}'.")
 
     def set_enabled(self, enabled: bool) -> None:
@@ -196,6 +200,10 @@ class Engine(QObject):
         duration = audio.shape[0] / self.cfg.sample_rate if audio.size else 0.0
         if duration < self.cfg.min_recording_seconds:
             self.statusMessage.emit(f"Recording too short ({duration:.2f}s), ignored.")
+            # recordingStarted already moved both UIs into their listening
+            # state. Even when an accidental tap is ignored, finish the UI
+            # cycle so the companion bubble cannot remain stuck onscreen.
+            self.finished.emit()
             return
         threading.Thread(target=self._transcribe_and_deliver, args=(audio,), daemon=True).start()
 
@@ -211,4 +219,4 @@ class Engine(QObject):
         self.finished.emit()
 
     def _do_deliver(self, text: str) -> None:
-        deliver(text, self.cfg)
+        deliver(text, self.cfg, self.pasted.emit)

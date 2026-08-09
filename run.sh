@@ -12,7 +12,15 @@ set -euo pipefail
 # real checkout - otherwise DIR lands in the symlink's directory and the venv
 # lookup below fails.
 DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-NVIDIA="$DIR/.venv/lib/python3.12/site-packages/nvidia"
-export LD_LIBRARY_PATH="$NVIDIA/cublas/lib:$NVIDIA/cuda_nvrtc/lib:${LD_LIBRARY_PATH:-}"
 
-exec "$DIR/.venv/bin/python" "$DIR/main.py"
+# Locate NVIDIA wheels under whichever Python version created this venv.
+# The original launcher assumed Python 3.12, which broke GPU discovery for
+# otherwise valid 3.10/3.11 environments.
+for NVIDIA in "$DIR"/.venv/lib/python*/site-packages/nvidia; do
+    if [[ -d "$NVIDIA" ]]; then
+        export LD_LIBRARY_PATH="$NVIDIA/cublas/lib:$NVIDIA/cuda_nvrtc/lib:${LD_LIBRARY_PATH:-}"
+        break
+    fi
+done
+
+exec "$DIR/.venv/bin/python" "$DIR/main.py" "$@"

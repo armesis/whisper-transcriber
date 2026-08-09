@@ -1,3 +1,4 @@
+import argparse
 import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -11,6 +12,14 @@ from transcriber.ui.tray import Tray
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Local push-to-talk dictation.")
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="start in the tray without opening the settings window",
+    )
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setStyleSheet(STYLESHEET)
@@ -20,20 +29,24 @@ def main():
     engine = Engine(cfg)
 
     indicator = Indicator()
+    indicator.set_hotkey(cfg.hotkey)
     engine.recordingStarted.connect(indicator.show_listening)
+    engine.audioLevel.connect(indicator.set_audio_level)
     engine.transcribing.connect(indicator.show_transcribing)
+    engine.pasted.connect(indicator.show_pasted)
     engine.finished.connect(indicator.hide_soon)
+    engine.hotkeyChanged.connect(indicator.set_hotkey)
     engine.statusMessage.connect(print)
 
     window = MainWindow(engine)
     tray = Tray(window, app)  # noqa: F841 - keeps the tray icon alive
 
-    # Show the settings window on launch - the tray icon alone isn't reliably
-    # discoverable (Windows hides new tray icons in the overflow area by
-    # default). Closing it just hides it; reopen from the tray any time.
-    window.show()
-    window.raise_()
-    window.activateWindow()
+    # An interactive launch opens settings; the login launcher keeps the app
+    # discreetly available in the background and ready for its global hotkey.
+    if not args.background:
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     engine.start()
 

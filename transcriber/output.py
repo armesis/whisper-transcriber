@@ -16,7 +16,7 @@ from .config import Config
 _kb = Controller()
 
 
-def deliver(text: str, cfg: Config) -> None:
+def deliver(text: str, cfg: Config, on_pasted=None) -> None:
     if not text or not cfg.paste_output:
         return
 
@@ -25,13 +25,16 @@ def deliver(text: str, cfg: Config) -> None:
     clipboard.setText(text)
 
     # let the OS clipboard settle before the paste hotkey fires
-    QTimer.singleShot(50, lambda: _paste_and_restore(clipboard, previous_clipboard, cfg))
+    QTimer.singleShot(50, lambda: _paste_and_restore(clipboard, previous_clipboard, cfg, on_pasted))
 
 
-def _paste_and_restore(clipboard, previous_clipboard, cfg: Config) -> None:
+def _paste_and_restore(clipboard, previous_clipboard, cfg: Config, on_pasted=None) -> None:
     with _kb.pressed(Key.ctrl):
         _kb.press("v")
         _kb.release("v")
+
+    if on_pasted:
+        on_pasted()
 
     if cfg.restore_clipboard and previous_clipboard is not None:
         # let the target app read the clipboard before we overwrite it

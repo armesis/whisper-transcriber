@@ -9,10 +9,9 @@ Runs fully offline (the `small` model is vendored in `models/`, no download or
 API calls needed) and uses your GPU automatically when one is available. Works
 on Windows and Ubuntu/Linux from the same codebase.
 
-It has a small always-on dark-themed UI (tray icon, floating "Listening..."
-indicator, hotkey picker, and searchable history) instead of hand-editing a
-config file — inspired by dictation tools like Wispr Flow, though this is an
-independent build, not a copy of their (closed-source) interface.
+It has a focused dark-themed UI, searchable history, and an animated companion
+that shows live microphone levels while listening, waits during transcription,
+and confirms when the text has been pasted.
 
 ## Setup
 
@@ -36,27 +35,41 @@ pip install -r requirements.txt
 
 ## Run
 
+Windows:
 ```bash
 python main.py
 ```
 
-A tray icon appears (a purple mic in a circle). Click it to open the settings
-window, where you can:
+Ubuntu/Linux:
+```bash
+./run.sh
+```
 
-- **Hotkey tab** — click the key button and hold whatever you want your new
-  push-to-talk hotkey to be; it can be a single key or a combo (e.g. hold
-  Ctrl then Win) — release any one of them to finish capturing (default:
-  **F9**). Releasing any key in the combo while dictating stops the recording.
-- **History tab** — every transcript is saved locally (`history.db`, SQLite);
-  search it, double-click an entry to copy it back to the clipboard, delete
-  entries, or clear everything.
+A tray icon appears (a purple mic in a circle). Click it to open the app, where
+you can change the push-to-talk hotkey or open the searchable transcription
+history. The default hotkey is **F9**; releasing any key in a multi-key combo
+stops the recording.
 
-To dictate: hold the hotkey, speak, release — a small pill appears at the
-bottom of your screen ("Listening..." → "Transcribing...") and the text is
-pasted into whatever field has focus.
+To dictate: focus the field where the result should appear, hold the hotkey,
+speak, then release. The floating companion shows **Listening** with a live
+waveform, **Transcribing**, and **Pasted**. The text is inserted automatically
+at the cursor. Accidental short taps are ignored and the indicator closes
+without getting stuck.
 
-Closing the settings window just hides it — the app keeps running in the
-tray. Quit from the tray menu.
+Closing the main window only hides it; the app keeps running in the tray. Quit
+from the tray menu.
+
+### Start automatically on Ubuntu/Linux
+
+Run this once from the cloned project directory:
+
+```bash
+./install-autostart.sh
+```
+
+The installer detects the checkout's absolute path and creates a per-user
+launcher. On the next graphical login, Whisper starts quietly in the tray with
+`--background`; you do not need to open a terminal first.
 
 ## Configuration
 
@@ -119,10 +132,11 @@ transcriber/
   output.py                clipboard + simulated paste
   history.py                SQLite dictation history
   ui/
-    main_window.py         settings window (Hotkey + History tabs)
+    main_window.py         focused status, hotkey, and history views
     tray.py                system tray icon
-    indicator.py            floating "Listening..." pill
+    indicator.py           animated companion + dictation state bubble
     hotkey_dialog.py        "press any key" capture dialog
     theme.py                dark stylesheet + generated icon
 models/small/               vendored faster-whisper "small" model (~460 MB)
+assets/                     companion artwork used by the UI
 ```
