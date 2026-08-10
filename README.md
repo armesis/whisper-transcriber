@@ -9,9 +9,9 @@ Runs fully offline (the `small` model is vendored in `models/`, no download or
 API calls needed) and uses your GPU automatically when one is available. Works
 on Windows and Ubuntu/Linux from the same codebase.
 
-It has a focused dark-themed UI, searchable history, and an animated companion
-that shows live microphone levels while listening, waits during transcription,
-and confirms when the text has been pasted.
+The UI stays out of the way: a small monochrome window for the hotkey and a
+searchable history, plus a compact pill near the bottom of the screen whose
+point blinks while you record and holds steady while the model transcribes.
 
 ## Setup
 
@@ -51,10 +51,10 @@ history. The default hotkey is **F9**; releasing any key in a multi-key combo
 stops the recording.
 
 To dictate: focus the field where the result should appear, hold the hotkey,
-speak, then release. The floating companion shows **Listening** with a live
-waveform, **Transcribing**, and **Pasted**. The text is inserted automatically
-at the cursor. Accidental short taps are ignored and the indicator closes
-without getting stuck.
+speak, then release. The pill reads **Listening...** with a blinking point,
+then **Transcribing...** with the point held steady, and disappears once the
+text has been inserted at your cursor. Accidental short taps are ignored and
+the pill closes without getting stuck.
 
 Closing the main window only hides it; the app keeps running in the tray. Quit
 from the tray menu.
@@ -132,11 +132,10 @@ transcriber/
   output.py                clipboard + simulated paste
   history.py                SQLite dictation history
   ui/
-    main_window.py         focused status, hotkey, and history views
+    main_window.py         status, hotkey, and history views
     tray.py                system tray icon
-    indicator.py           animated companion + dictation state bubble
+    indicator.py           floating dictation pill
     hotkey_dialog.py        "press any key" capture dialog
     theme.py                dark stylesheet + generated icon
 models/small/               vendored faster-whisper "small" model (~460 MB)
-assets/                     companion artwork used by the UI
 ```

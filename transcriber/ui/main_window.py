@@ -1,8 +1,6 @@
 """A focused control surface for local push-to-talk dictation."""
-from pathlib import Path
-
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -21,9 +19,7 @@ from PySide6.QtWidgets import (
 from .. import history
 from ..engine import Engine, format_hotkey, session_warning
 from .hotkey_dialog import HotkeyDialog
-from .theme import ACCENT, BG, BORDER, LISTENING, MUTED, SUCCESS, TEXT
-
-_CAT_ASSET = Path(__file__).resolve().parents[2] / "assets" / "whisper-cat-tight.png"
+from .theme import BG, BORDER, MUTED, TEXT
 
 
 def _display_hotkey(spec: str) -> str:
@@ -36,15 +32,11 @@ class _TitleBar(QWidget):
         self._window = window
         self._drag_pos: QPoint | None = None
         self.setObjectName("titleBar")
-        self.setFixedHeight(48)
+        self.setFixedHeight(40)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 0, 10, 0)
+        layout.setContentsMargins(16, 0, 8, 0)
         layout.setSpacing(8)
-
-        mark = QLabel("●")
-        mark.setStyleSheet(f"color: {ACCENT}; font-size: 16px; background: transparent;")
-        layout.addWidget(mark)
 
         title = QLabel("Whisper")
         title.setObjectName("appName")
@@ -82,17 +74,21 @@ class _HomeView(QWidget):
         self.setObjectName("page")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 22, 30, 26)
+        layout.setContentsMargins(22, 14, 22, 20)
         layout.setSpacing(0)
 
         status_row = QHBoxLayout()
         status_row.setSpacing(8)
         self._state_dot = QLabel("●")
-        self._state_dot.setStyleSheet(f"color: {SUCCESS}; font-size: 14px; background: transparent;")
+        self._state_dot.setStyleSheet(f"color: {MUTED}; font-size: 9px; background: transparent;")
+        # Centred inside a box as tall as the title, so the point sits on the
+        # title's midline instead of floating above it.
+        self._state_dot.setFixedHeight(24)
+        self._state_dot.setAlignment(Qt.AlignCenter)
         status_row.addWidget(self._state_dot, alignment=Qt.AlignTop)
 
         status_copy = QVBoxLayout()
-        status_copy.setSpacing(5)
+        status_copy.setSpacing(4)
         self._state_title = QLabel("Ready")
         self._state_title.setObjectName("statusTitle")
         status_copy.addWidget(self._state_title)
@@ -104,23 +100,17 @@ class _HomeView(QWidget):
         status_row.addStretch()
         layout.addLayout(status_row)
 
-        layout.addSpacing(26)
+        layout.addSpacing(18)
 
         card = QFrame()
         card.setObjectName("hotkeyCard")
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(18, 16, 16, 16)
-        card_layout.setSpacing(14)
+        card_layout.setContentsMargins(14, 12, 12, 12)
+        card_layout.setSpacing(12)
 
-        key_copy = QVBoxLayout()
-        key_copy.setSpacing(3)
         label = QLabel("Push to talk")
         label.setObjectName("cardLabel")
-        key_copy.addWidget(label)
-        hint = QLabel("Change the key anytime")
-        hint.setObjectName("muted")
-        key_copy.addWidget(hint)
-        card_layout.addLayout(key_copy)
+        card_layout.addWidget(label)
         card_layout.addStretch()
 
         self._key_btn = QPushButton(_display_hotkey(engine.cfg.hotkey))
@@ -129,21 +119,10 @@ class _HomeView(QWidget):
         card_layout.addWidget(self._key_btn)
         layout.addWidget(card)
 
-        layout.addSpacing(14)
-        footer = QHBoxLayout()
+        layout.addSpacing(12)
         details = QLabel("Small model  ·  Auto language  ·  On-device")
         details.setObjectName("muted")
-        footer.addWidget(details, alignment=Qt.AlignVCenter)
-        footer.addStretch()
-
-        companion = QLabel()
-        companion.setAccessibleName("Decorative resting cat")
-        cat = QPixmap(str(_CAT_ASSET))
-        if not cat.isNull():
-            companion.setPixmap(cat.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            footer.addWidget(companion, alignment=Qt.AlignRight | Qt.AlignVCenter)
-
-        layout.addLayout(footer)
+        layout.addWidget(details)
         layout.addStretch()
 
         if session_warning():
@@ -166,14 +145,16 @@ class _HomeView(QWidget):
     def set_state(self, state: str):
         key = _display_hotkey(self._engine.cfg.hotkey)
         states = {
-            "ready": ("Ready", f"Hold {key} while you speak. Release it to transcribe and paste.", SUCCESS),
-            "listening": ("Listening", f"Speak naturally. Release {key} when you are done.", LISTENING),
-            "transcribing": ("Transcribing", "Working locally on your device.", ACCENT),
+            # Only the copy distinguishes the states now; the dot brightens
+            # while a dictation is in flight and rests grey otherwise.
+            "ready": ("Ready", f"Hold {key} while you speak. Release it to transcribe and paste.", MUTED),
+            "listening": ("Listening", f"Speak naturally. Release {key} when you are done.", TEXT),
+            "transcribing": ("Transcribing", "Working locally on your device.", TEXT),
         }
         title, description, color = states[state]
         self._state_title.setText(title)
         self._state_description.setText(description)
-        self._state_dot.setStyleSheet(f"color: {color}; font-size: 14px; background: transparent;")
+        self._state_dot.setStyleSheet(f"color: {color}; font-size: 9px; background: transparent;")
 
 
 class _HistoryView(QWidget):
@@ -181,8 +162,8 @@ class _HistoryView(QWidget):
         super().__init__()
         self.setObjectName("page")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 22)
-        layout.setSpacing(12)
+        layout.setContentsMargins(18, 10, 18, 16)
+        layout.setSpacing(10)
 
         top_row = QHBoxLayout()
         back_btn = QPushButton("‹  Back")
@@ -205,6 +186,10 @@ class _HistoryView(QWidget):
         layout.addWidget(self._search)
 
         self._list = QListWidget()
+        # The window is narrow, so long transcripts wrap rather than pushing a
+        # horizontal scrollbar under the list.
+        self._list.setWordWrap(True)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_context_menu)
         self._list.itemDoubleClicked.connect(self._copy_item)
@@ -256,7 +241,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("Whisper")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(460, 340)
+        self.setFixedSize(384, 268)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)

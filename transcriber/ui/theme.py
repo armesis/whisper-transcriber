@@ -35,8 +35,8 @@ QLabel#appName {{
     font-weight: 700;
 }}
 QLabel#statusTitle {{
-    font-size: 24px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 650;
 }}
 QLabel#statusDescription {{
     color: {MUTED};
@@ -53,17 +53,17 @@ QPushButton {{
     font-family: "Inter", "Noto Sans", "Ubuntu", sans-serif;
 }}
 QPushButton#hotkeyButton {{
-    background-color: {ACCENT};
-    border: none;
-    border-radius: 10px;
-    color: #171520;
-    font-size: 16px;
-    font-weight: 750;
-    min-width: 92px;
-    padding: 12px 18px;
+    background-color: {SURFACE_ELEVATED};
+    border: 1px solid {BORDER};
+    border-radius: 8px;
+    color: {TEXT};
+    font-size: 13px;
+    font-weight: 650;
+    min-width: 78px;
+    padding: 8px 14px;
 }}
 QPushButton#hotkeyButton:hover {{
-    background-color: {ACCENT_HOVER};
+    border-color: {MUTED};
 }}
 QPushButton#textButton, QPushButton#closeButton, QPushButton#dangerButton {{
     background: transparent;
@@ -84,10 +84,11 @@ QPushButton#closeButton {{
     min-width: 28px;
 }}
 QPushButton#dangerButton {{
-    color: {DANGER};
+    color: {MUTED};
 }}
 QPushButton#dangerButton:hover {{
-    background: #3a2024;
+    background: {SURFACE_ELEVATED};
+    color: {TEXT};
 }}
 QLineEdit {{
     background-color: {SURFACE};
@@ -97,7 +98,7 @@ QLineEdit {{
     padding: 8px 10px;
 }}
 QLineEdit:focus {{
-    border-color: {ACCENT};
+    border-color: {MUTED};
 }}
 QListWidget {{
     background: transparent;
@@ -115,7 +116,7 @@ QListWidget::item:hover {{
     background-color: {SURFACE_ELEVATED};
 }}
 QListWidget::item:selected {{
-    border-color: {ACCENT};
+    border-color: {MUTED};
     background-color: {SURFACE_ELEVATED};
 }}
 QMenu {{
@@ -139,6 +140,12 @@ QScrollBar::handle:vertical {{
     background: {BORDER};
     border-radius: 4px;
     min-height: 24px;
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0;
+}}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    background: transparent;
 }}
 """
 
