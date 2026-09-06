@@ -1,9 +1,9 @@
 """Local SQLite log of past dictations."""
 import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
+from .paths import data_dir
 
-DB_PATH = Path(__file__).resolve().parent.parent / "history.db"
+DB_PATH = data_dir() / "history.db"
 
 
 @dataclass

@@ -74,8 +74,10 @@ launcher. On the next graphical login, Whisper starts quietly in the tray with
 ## Configuration
 
 Everything is in the UI now. Advanced settings (model size, device, language,
-whether to paste automatically) still live in `config.json`, created next to
-`main.py` on first run:
+whether to paste automatically) still live in `config.json`, created on first
+run next to `main.py` when you run from a checkout, or in
+`%LOCALAPPDATA%\WhisperTranscriber\` when you run a packaged build (which
+cannot write next to its own `.exe`). `history.db` follows the same rule.
 
 | key | meaning |
 |---|---|
@@ -87,6 +89,67 @@ whether to paste automatically) still live in `config.json`, created next to
 | `min_recording_seconds` | ignores accidental taps shorter than this |
 | `paste_output` | `true` to paste at the cursor, `false` to only save to history |
 | `restore_clipboard` | restore your previous clipboard contents after pasting |
+| `vad_filter` | `true` to trim silence with the Silero VAD; ignored, with a cheaper energy-based trim used instead, when the build does not ship `onnxruntime` |
+
+## Build a standalone Windows app
+
+`packaging\build.ps1` freezes everything into `build\dist\WhisperTranscriber\`
+— a folder you can copy to any 64-bit Windows 10/11 machine and run. No Python,
+no pip, no Visual C++ redistributable, no GPU. CUDA is still picked up
+automatically on machines that have it.
+
+```powershell
+.\packaging\build.ps1 -Zip
+```
+
+That default ships **no model**: the app downloads the one named in
+`config.json` the first time it starts and caches it under `%LOCALAPPDATA%`. It
+is the smallest thing to hand someone, at the cost of needing a connection once.
+
+To make it fully offline, fetch a model and bake it in:
+
+```powershell
+.\.venv\Scripts\python.exe packaging\fetch_model.py base
+.\packaging\build.ps1 -Model base -Zip
+```
+
+Measured on this project:
+
+| build | installed | zipped |
+|---|---|---|
+| `-Zip` (model downloaded on first run) | 156 MB | 58 MB |
+| `-Model base -Zip` (multilingual, offline) | 297 MB | 185 MB |
+| `-Model small -Zip` (what the repo vendors) | 620 MB | — |
+
+The runtime floor is ~156 MB and is almost entirely three native payloads:
+`ctranslate2.dll` (57 MB, the inference engine), Qt (39 MB) and numpy's BLAS
+(20 MB). Everything above that is the model, so **the model is the only real
+size decision**. `fetch_model.py --int8` roughly halves a model's weights by
+quantizing them ahead of time instead of at load; it needs `transformers` and
+`torch` installed as a one-off build dependency and ships neither.
+
+Other flags:
+
+| flag | effect |
+|---|---|
+| `-WithVad` | bundle `onnxruntime` (+45 MB) for the Silero VAD instead of the energy-based silence trim |
+| `-Console` | keep a console window attached so `print()` output is visible |
+| `-KeepAllQt` | ship every Qt DLL, including the 20 MB software OpenGL fallback |
+| `-Zip` | also write `build\WhisperTranscriber.zip` |
+
+The build ends by running `WhisperTranscriber.exe --selftest`, which constructs
+the real widgets and (when a model is bundled) runs a transcription, so a build
+that passes has proven its Qt, CTranslate2, tokenizers and numpy payloads all
+load. You can run that by hand on any machine you deploy to.
+
+### Start automatically on Windows
+
+```powershell
+.\packaging\install-autostart.ps1
+```
+
+Adds a per-user Startup shortcut that launches the app with `--background`, so
+it comes up in the tray with no window. `-Remove` undoes it.
 
 ## Platform notes
 
@@ -137,5 +200,12 @@ transcriber/
     indicator.py           floating dictation pill
     hotkey_dialog.py        "press any key" capture dialog
     theme.py                dark stylesheet + generated icon
+  paths.py                 where to read resources / write state, frozen or not
+packaging/
+  build.ps1                one-command Windows build (see above)
+  whisper.spec             PyInstaller spec: excludes, Qt pruning, model bundling
+  rthook_stub_av.py        stands in for PyAV, which is imported but never used
+  fetch_model.py           download a model into models/ so a build can bundle it
+  install-autostart.ps1    Startup-folder shortcut for Windows
 models/small/               vendored faster-whisper "small" model (~460 MB)
 ```

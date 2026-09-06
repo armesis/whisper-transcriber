@@ -1,9 +1,9 @@
 """Configuration for the dictation tool. Edit config.json (created on first run) to change these."""
 import json
 from dataclasses import dataclass, asdict
-from pathlib import Path
+from .paths import data_dir
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+CONFIG_PATH = data_dir() / "config.json"
 
 
 @dataclass
@@ -17,6 +17,7 @@ class Config:
     sample_rate: int = 16000
     paste_output: bool = True   # copy transcript to clipboard and paste at the cursor
     restore_clipboard: bool = True  # restore whatever was on the clipboard before pasting
+    vad_filter: bool = True     # trim silence with Silero VAD (needs the onnxruntime package)
 
 
 def load_config() -> Config:
