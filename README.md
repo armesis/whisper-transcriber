@@ -117,11 +117,11 @@ Measured on this project:
 
 | build | installed | zipped |
 |---|---|---|
-| `-Zip` (model downloaded on first run) | 156 MB | 58 MB |
-| `-Model base -Zip` (multilingual, offline) | 297 MB | 185 MB |
-| `-Model small -Zip` (what the repo vendors) | 620 MB | — |
+| `-Zip` (model downloaded on first run) | 159 MB | 59 MB |
+| `-Model base -Zip` (multilingual, offline) | 300 MB | 186 MB |
+| `-Model small` (what the repo vendors) | 623 MB | — |
 
-The runtime floor is ~156 MB and is almost entirely three native payloads:
+The runtime floor is ~159 MB and is almost entirely three native payloads:
 `ctranslate2.dll` (57 MB, the inference engine), Qt (39 MB) and numpy's BLAS
 (20 MB). Everything above that is the model, so **the model is the only real
 size decision**. `fetch_model.py --int8` roughly halves a model's weights by
