@@ -62,28 +62,26 @@ def _vad_available() -> bool:
     return importlib.util.find_spec("onnxruntime") is not None
 
 
-def _trim_silence(audio: np.ndarray, sample_rate: int) -> np.ndarray:
-    """Cheap stand-in for the VAD: drop the quiet head and tail of the clip.
+def _is_silent(audio: np.ndarray, sample_rate: int) -> bool:
+    """True when the clip holds no sound loud enough to be anyone speaking.
 
-    Whisper is prone to inventing text ("Thank you.", "Bye!") when handed a
-    stretch of near-silence, which is exactly what the start and end of a
-    push-to-talk recording look like. Cutting it costs nothing and removes most
-    of the hallucinations the VAD filter was there to prevent.
+    This deliberately does not trim anything. An earlier version cut the quiet
+    head and tail relative to the loudest frame, which clips the opening word of
+    a sentence that starts softly and peaks later - a quiet, hard-to-attribute
+    loss of exactly the kind that makes dictation feel unreliable. Nothing here
+    is worth that: measured against real room noise, the Silero VAD this stands
+    in for does not prevent the hallucinations either, so there is no accuracy
+    to win back by being clever. Either the clip is dead air and we say so, or
+    it goes to the model untouched.
     """
     frame = max(1, int(sample_rate * 0.03))
-    frames = audio[: len(audio) - len(audio) % frame].reshape(-1, frame)
-    if frames.size == 0:
-        return audio
-    loudness = np.sqrt(np.mean(frames * frames, axis=1))
-    # Relative to the loudest frame, so it adapts to quiet and loud microphones
-    # alike instead of relying on one absolute threshold.
-    speech = np.flatnonzero(loudness > max(loudness.max() * 0.12, 0.004))
-    if speech.size == 0:
-        return np.zeros(0, dtype=audio.dtype)
-    pad = int(0.2 * sample_rate / frame)
-    start = max(0, speech[0] - pad) * frame
-    end = min(len(frames), speech[-1] + 1 + pad) * frame
-    return audio[start:end]
+    usable = audio[: len(audio) - len(audio) % frame]
+    if usable.size == 0:
+        return True
+    loudness = np.sqrt(np.mean(usable.reshape(-1, frame) ** 2, axis=1))
+    # An absolute floor, well below speech at any sane microphone gain, so this
+    # only ever fires on a recording with nothing in it at all.
+    return bool(loudness.max() < 0.01)
 
 
 class Transcriber:
@@ -106,10 +104,8 @@ class Transcriber:
     def transcribe(self, audio: np.ndarray) -> str:
         if audio.size == 0:
             return ""
-        if not self.vad_filter:
-            audio = _trim_silence(audio, self.cfg.sample_rate)
-            if audio.size == 0:
-                return ""
+        if not self.vad_filter and _is_silent(audio, self.cfg.sample_rate):
+            return ""
         language = None if self.cfg.language == "auto" else self.cfg.language
         segments, _info = self.model.transcribe(
             audio,

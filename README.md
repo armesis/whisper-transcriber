@@ -119,14 +119,34 @@ Measured on this project:
 |---|---|---|
 | `-Zip` (model downloaded on first run) | 159 MB | 59 MB |
 | `-Model base -Zip` (multilingual, offline) | 300 MB | 186 MB |
-| `-Model small` (what the repo vendors) | 623 MB | — |
+| `-Model small-int8 -WithVad` (**recommended**) | 436 MB | — |
+| `-Model small` (the float16 weights the repo vendors) | 623 MB | — |
 
 The runtime floor is ~159 MB and is almost entirely three native payloads:
 `ctranslate2.dll` (57 MB, the inference engine), Qt (39 MB) and numpy's BLAS
 (20 MB). Everything above that is the model, so **the model is the only real
-size decision**. `fetch_model.py --int8` roughly halves a model's weights by
-quantizing them ahead of time instead of at load; it needs `transformers` and
-`torch` installed as a one-off build dependency and ships neither.
+size decision**.
+
+### Quantize the model instead of shrinking it
+
+Dropping from `small` to `base` costs real accuracy - on a hard word, `small`
+hears "Kubernetes" where `base` hears "Cabernet". Quantizing costs nothing.
+CTranslate2 already converts float16 weights to int8 while loading them on CPU,
+so shipping int8 weights hands the CPU exactly the numbers it was going to
+compute with anyway - at half the bytes.
+
+```powershell
+python -m venv build\convert-venv
+.\build\convert-venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+.\build\convert-venv\Scripts\python.exe -m pip install ctranslate2 transformers
+.\build\convert-venv\Scripts\python.exe packaging\fetch_model.py small --int8 --name small-int8
+.\packaging\build.ps1 -Model small-int8 -WithVad
+```
+
+`torch` is a build dependency only, which is why it goes in a throwaway venv -
+nothing from it is shipped. `small` drops from 484 MB to 252 MB. Transcribing
+four reference clips through both, on CPU int8 and on CUDA float16, the int8
+weights produced output identical to float16 in every case.
 
 Other flags:
 
@@ -136,6 +156,16 @@ Other flags:
 | `-Console` | keep a console window attached so `print()` output is visible |
 | `-KeepAllQt` | ship every Qt DLL, including the 20 MB software OpenGL fallback |
 | `-Zip` | also write `build\WhisperTranscriber.zip` |
+
+Install a finished build for the current user - copied to
+`%LOCALAPPDATA%\Programs` with a Start Menu shortcut, so it survives the
+next `build.ps1 --clean` wiping the build folder:
+
+```powershell
+.\packaging\install.ps1 -Start
+```
+
+`-Remove` uninstalls it and leaves your settings and history alone.
 
 The build ends by running `WhisperTranscriber.exe --selftest`, which constructs
 the real widgets and (when a model is bundled) runs a transcription, so a build

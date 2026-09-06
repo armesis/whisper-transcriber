@@ -120,7 +120,11 @@ class _HomeView(QWidget):
         layout.addWidget(card)
 
         layout.addSpacing(12)
-        details = QLabel("Small model  ·  Auto language  ·  On-device")
+        # Which model is running is decided by the config, and by the build for a
+        # packaged app - so read it rather than restating one of them here, which
+        # went stale the moment a build shipped anything but "small".
+        language = "Auto language" if engine.cfg.language == "auto" else f"{engine.cfg.language.upper()} only"
+        details = QLabel(f"{engine.cfg.model_size} model  ·  {language}  ·  On-device")
         details.setObjectName("muted")
         layout.addWidget(details)
         layout.addStretch()
