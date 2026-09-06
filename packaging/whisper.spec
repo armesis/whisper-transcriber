@@ -181,6 +181,53 @@ def _prune_unreachable_qt(binaries):
 if not KEEP_ALL_QT:
     a.binaries = _prune_unreachable_qt(a.binaries)
 
+
+def _colocate_msvc_runtime(binaries):
+    """Put the Visual C++ runtime beside every DLL that needs it.
+
+    Python loads extension modules with LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, so a
+    dependency is looked for in the folder of the module being loaded and then
+    in the system directories - not in sibling folders. PyInstaller collects
+    MSVCP140.dll into the PySide6 folder because that is the wheel it came
+    from, which leaves ctranslate2.dll resolving it from System32. That works on
+    any developer machine, and on most others, because so much software installs
+    the redistributable - but "most" is not "any", and when it is missing the
+    app dies on import with nothing useful to say. A few hundred kilobytes of
+    duplication buys a build that genuinely stands alone.
+    """
+    from PyInstaller.depend import bindepend
+
+    def is_runtime(name):
+        return name.lower().startswith(("msvcp140.", "msvcp140_", "vcruntime140", "concrt140"))
+
+    available = {}
+    for dest, src, _kind in binaries:
+        name = Path(dest).name
+        if is_runtime(name):
+            available.setdefault(name.lower(), src)
+
+    present = {(Path(dest).parent.as_posix(), Path(dest).name.lower()) for dest, _s, _k in binaries}
+
+    extra = []
+    for dest, src, _kind in binaries:
+        folder = Path(dest).parent
+        try:
+            imports = bindepend.get_imports(src)
+        except Exception:
+            continue
+        for name, _ in imports:
+            key = name.lower()
+            if not is_runtime(name) or key not in available:
+                continue
+            if (folder.as_posix(), key) in present:
+                continue
+            present.add((folder.as_posix(), key))
+            extra.append((str(folder / name), available[key], "BINARY"))
+    return binaries + extra
+
+
+a.binaries = _colocate_msvc_runtime(a.binaries)
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
