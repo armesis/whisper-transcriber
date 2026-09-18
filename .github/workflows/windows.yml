@@ -115,6 +115,13 @@ jobs:
           ZIP: ${{ steps.package.outputs.name }}
           LABEL: ${{ steps.package.outputs.label }}
         run: |
+          # "Does this release already exist?" is asked by running a command
+          # that fails when it does not. PowerShell 7.4 turns a failing native
+          # command into a terminating error under the 'stop' preference that
+          # Actions sets, so the question has to be asked with that off.
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:TAG "$env:ZIP#$env:LABEL" --clobber
@@ -125,4 +132,5 @@ jobs:
               --generate-notes `
               --notes "Standalone 64-bit Windows build: no Python, no Visual C++ redistributable and no GPU needed. Unzip it anywhere and run ``WhisperTranscriber.exe``."
           }
+          if ($LASTEXITCODE -ne 0) { throw "Publishing $env:TAG failed with exit code $LASTEXITCODE" }
           "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:TAG" >> $env:GITHUB_STEP_SUMMARY
