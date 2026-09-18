@@ -237,5 +237,17 @@ packaging/
   rthook_stub_av.py        stands in for PyAV, which is imported but never used
   fetch_model.py           download a model into models/ so a build can bundle it
   install-autostart.ps1    Startup-folder shortcut for Windows
+tests/                     hotkey and push-to-talk state machine tests
 models/small/               vendored faster-whisper "small" model (~460 MB)
 ```
+
+## Tests
+
+```bash
+pip install pytest
+python -m pytest tests
+```
+
+They cover the hotkey state machine - which key events start and stop a
+recording - with the microphone, the model and the OS key-state probe stubbed
+out, so they run anywhere, including headless.

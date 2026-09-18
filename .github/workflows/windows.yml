@@ -1,0 +1,128 @@
+# Tests on every push, and a full Windows build + release on demand.
+#
+# The build has to happen here because PyInstaller does not cross-compile: a
+# Windows .exe can only be produced on Windows, and this is the Windows machine
+# the project has. It runs exactly the recipe the README documents, including
+# the build's own --selftest, so a green run is a build that has proven its Qt,
+# CTranslate2, tokenizers and numpy payloads load.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish the build under, e.g. v1.0.1"
+        required: true
+        default: v1.0.1
+      model:
+        description: "Model to bake into the build"
+        type: choice
+        default: small-int8
+        options:
+          - small-int8   # quantized, fully offline, ~274 MB zipped
+          - none         # downloads on first run, ~59 MB zipped
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - name: Run the tests
+        # Windows is where the hotkey state is reconciled against the real
+        # hardware, so this is the platform whose result counts.
+        run: python -m pytest tests -q
+
+  build:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The vendored float16 model is 484 MB of Git LFS that this build has
+          # no use for: it quantizes its own copy, or ships none at all.
+          lfs: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Create the app venv
+        # build.ps1 freezes whatever is installed in .venv, so this is the venv
+        # that decides what ends up in the build.
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python.exe -m pip install --upgrade pip
+          .venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller
+
+      - name: Quantize the model
+        if: inputs.model == 'small-int8'
+        # torch and transformers are build-time only - the conversion reads the
+        # original OpenAI checkpoint - so they go in a throwaway venv where
+        # PyInstaller will never see them.
+        run: |
+          python -m venv build\convert-venv
+          build\convert-venv\Scripts\python.exe -m pip install --upgrade pip
+          build\convert-venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          build\convert-venv\Scripts\python.exe -m pip install ctranslate2 "transformers<5"
+          build\convert-venv\Scripts\python.exe packaging\fetch_model.py small --int8 --name small-int8
+
+      - name: Build and self-test
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          $model = if ($env:MODEL -eq "none") { @() } else { "-Model", $env:MODEL }
+          .\packaging\build.ps1 @model -WithVad -Zip
+
+      - name: Name the zip after its release
+        id: package
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          $name = "WhisperTranscriber-$env:TAG-win64.zip"
+          Move-Item build\WhisperTranscriber.zip $name
+          $mb = "{0:N0} MB" -f ((Get-Item $name).Length / 1MB)
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "label=$name ($mb)" >> $env:GITHUB_OUTPUT
+          "Built $name ($mb)" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Keep the zip even if publishing fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhisperTranscriber-win64
+          path: ${{ steps.package.outputs.name }}
+          compression-level: 0
+          retention-days: 7
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          ZIP: ${{ steps.package.outputs.name }}
+          LABEL: ${{ steps.package.outputs.label }}
+        run: |
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG "$env:ZIP#$env:LABEL" --clobber
+          } else {
+            gh release create $env:TAG "$env:ZIP#$env:LABEL" `
+              --target $env:GITHUB_SHA `
+              --title "$env:TAG - Standalone Windows build" `
+              --generate-notes `
+              --notes "Standalone 64-bit Windows build: no Python, no Visual C++ redistributable and no GPU needed. Unzip it anywhere and run ``WhisperTranscriber.exe``."
+          }
+          "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:TAG" >> $env:GITHUB_STEP_SUMMARY
