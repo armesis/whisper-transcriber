@@ -85,8 +85,12 @@ jobs:
         env:
           MODEL: ${{ inputs.model }}
         run: |
-          $model = if ($env:MODEL -eq "none") { @() } else { "-Model", $env:MODEL }
-          .\packaging\build.ps1 @model -WithVad -Zip
+          # A hashtable, not an array: splatting an array passes its elements
+          # positionally, so "-Model" would arrive as a value rather than a
+          # parameter name.
+          $params = @{ WithVad = $true; Zip = $true }
+          if ($env:MODEL -ne "none") { $params.Model = $env:MODEL }
+          .\packaging\build.ps1 @params
 
       - name: Name the zip after its release
         id: package
